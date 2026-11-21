@@ -179,11 +179,17 @@
     <div class="mute small">App tự lấy địa chỉ mới trước mỗi lần ghi. Chỉ cần dán tay khi app báo không tự lấy được.</div>
     <input id="url" style="margin-top:8px" placeholder="https://videos-3.earthcam.com/fecnetwork/AbbeyRoadHD1.flv/playlist.m3u8?t=...&td=...">
     <div class="row">
+      <button class="pri" id="btnRefresh">🔗 Lấy link m3u8</button>
+      <button id="btnCopyRaw" title="Link gốc của EarthCam — chỉ mở được khi có header Referer">📋 Sao chép link gốc</button>
+      <button id="btnCopyProxy" title="Link qua app, tự gắn Referer — dán thẳng vào VLC được">📋 Sao chép link cho VLC</button>
+    </div>
+    <div class="row">
       <button id="btnCheck">Kiểm tra</button>
-      <button class="pri" id="btnSaveUrl">Lưu địa chỉ</button>
-      <button id="btnRefresh">Tự lấy địa chỉ mới</button>
+      <button id="btnSaveUrl">Lưu địa chỉ dán tay</button>
+      <span id="urlTd" class="mute small"></span>
     </div>
     <div id="urlMsg" class="mute" style="margin-top:8px"></div>
+    <div class="mute small" style="margin-top:6px">Link gốc cần Referer, ví dụ: <code>vlc --http-referrer=https://www.earthcam.com/ "&lt;link gốc&gt;"</code>. Link cho VLC thì chỉ chạy khi app đang chạy.</div>
   </section>
 
   <!-- ============ LỊCH ============ -->
@@ -303,6 +309,7 @@ function render() {
   sel.innerHTML = S.config.slots.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
   if (keep && S.config.slots.some(s => s.id === keep)) sel.value = keep;
   if (document.activeElement !== $("url") && !$("url").dataset.dirty) $("url").value = S.config.stream_url;
+  $("urlTd").textContent = S.stream_td ? `Link hiện tại: td=${S.stream_td}` : "";
 
   const cnt = { pending: 0, uploading: 0, done: 0, error: 0, saved: 0 };
   S.files.forEach(f => cnt[f.status]++);
@@ -531,8 +538,19 @@ const urlMsg = (ok, m) => { $("urlMsg").textContent = (ok ? "✔ " : "✘ ") + m
 $("btnCheck").onclick = async () => { $("urlMsg").textContent = "Đang kiểm tra…"; $("urlMsg").style.color = "";
   const r = await api("POST", "/api/stream/check", { url: $("url").value }).catch(e => ({ msg: e.message })); urlMsg(r.ok, r.msg); };
 $("btnSaveUrl").onclick = act(async () => { await api("PUT", "/api/stream", { url: $("url").value }); delete $("url").dataset.dirty; urlMsg(true, "Đã lưu"); });
-$("btnRefresh").onclick = act(async () => { $("urlMsg").textContent = "Đang lấy…"; const r = await api("POST", "/api/stream/refresh");
-  delete $("url").dataset.dirty; urlMsg(r.ok, r.ok ? "Đã lấy địa chỉ mới" : r.msg); });
+$("btnRefresh").onclick = act(async () => { $("urlMsg").textContent = "Đang lấy link từ trang EarthCam…"; $("urlMsg").style.color = "";
+  const r = await api("POST", "/api/stream/refresh");
+  delete $("url").dataset.dirty; urlMsg(r.ok, r.ok ? "Đã lấy link m3u8 mới và kiểm tra mở được — bấm Sao chép để dùng" : r.msg); });
+async function copyText(text, what) {
+  if (!text) return urlMsg(false, "Chưa có link — bấm “Lấy link m3u8” trước");
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+  urlMsg(true, `Đã sao chép ${what}`);
+}
+$("btnCopyRaw").onclick = () => copyText(S.config.stream_url, "link gốc");
+// same form as proxy_path() in app.py: /proxy/<base64url>/playlist.m3u8
+const proxyLink = u => `${location.origin}/proxy/${btoa(u).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}/playlist.m3u8`;
+$("btnCopyProxy").onclick = () => copyText(S.config.stream_url && proxyLink(S.config.stream_url), "link cho VLC");
 
 // ---------- settings ----------
 $("btnSaveSet").onclick = act(async () => { await api("PUT", "/api/settings", { segment_seconds: Math.round(+$("setSeg").value * 60),

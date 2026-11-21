@@ -1,5 +1,6 @@
 """Ghi cam EarthCam Abbey Road theo lịch và tải lên Google Drive bằng rclone."""
 import asyncio
+import base64
 import json
 import math
 import os
@@ -1059,6 +1060,22 @@ async def events(request: Request):
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+def proxy_path(u):
+    """/proxy/<base64 url>/<original file name>: ffmpeg-based players (mpv, ffplay) only accept HLS
+    segments whose URL path ends in a media extension, so the name must stay last and outside the query."""
+    token = base64.urlsafe_b64encode(u.encode()).decode().rstrip("=")
+    return f"/proxy/{token}/{quote(urlparse(u).path.rsplit('/', 1)[-1] or 'x')}"
+
+
+@app.get("/proxy/{token}/{name}")
+async def proxy_by_path(token: str, name: str):
+    try:
+        u = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode()
+    except ValueError:  # also covers UnicodeDecodeError
+        raise HTTPException(400, "Link proxy bị hỏng")
+    return await proxy(u)
+
+
 @app.get("/proxy")
 async def proxy(u: str):
     """Live view: hls.js can't set Referer, so the backend fetches and rewrites playlist URLs to come back here."""
@@ -1071,7 +1088,7 @@ async def proxy(u: str):
     ct = r.headers.get("content-type", "")
     if ".m3u8" in urlparse(u).path or "mpegurl" in ct.lower():
         base = str(r.url)
-        wrap = lambda x: "/proxy?u=" + quote(urljoin(base, x), safe="")
+        wrap = lambda x: proxy_path(urljoin(base, x))
         lines = [wrap(ln) if ln and not ln.startswith("#") else re.sub(r'URI="([^"]+)"', lambda m: f'URI="{wrap(m[1])}"', ln)
                  for ln in r.text.splitlines()]
         return Response("\n".join(lines), r.status_code, media_type="application/vnd.apple.mpegurl")
