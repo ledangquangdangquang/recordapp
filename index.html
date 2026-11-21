@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghi cam Abbey Road</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --fg:#e6e8ee; --mute:#8b93a5; --acc:#4f8cff;
+          --ok:#2fbf71; --warn:#f0a020; --err:#ef5350; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif }
+  main { max-width:1200px; margin:0 auto; padding:16px; display:grid; gap:16px; grid-template-columns:1fr 1fr }
+  header { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between }
+  h1 { font-size:20px; margin:0 } h2 { font-size:14px; margin:0 0 12px; color:var(--mute); font-weight:600; text-transform:uppercase; letter-spacing:.04em }
+  h2 small { text-transform:none; letter-spacing:0; font-weight:400 }
+  .clocks { display:flex; gap:20px } .clock b { font-size:22px; font-variant-numeric:tabular-nums; display:block }
+  .clock span { color:var(--mute); font-size:12px }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0 }
+  .wide { grid-column:1/-1 }
+  .badge { display:inline-block; padding:4px 12px; border-radius:99px; font-weight:700; font-size:15px }
+  .b-recording { background:#2fbf7122; color:var(--ok) } .b-idle { background:#8b93a522; color:var(--mute) }
+  .b-error { background:#ef535022; color:var(--err) } .b-starting { background:#f0a02022; color:var(--warn) }
+  .big { font-size:26px; font-variant-numeric:tabular-nums; font-weight:700; margin:6px 0 }
+  .mute { color:var(--mute) } .small { font-size:12px }
+  .alert { background:#ef535018; border:1px solid #ef535066; color:#ffb4b2; padding:10px; border-radius:8px; margin-top:10px; white-space:pre-wrap }
+  .note { background:#4f8cff14; border:1px solid #4f8cff55; padding:10px; border-radius:8px; margin-top:10px }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px }
+  button, a.btn { background:#262b36; color:var(--fg); border:1px solid var(--line); border-radius:7px; padding:7px 12px; cursor:pointer; font:inherit; text-decoration:none; display:inline-block }
+  button:hover, a.btn:hover { border-color:var(--acc) } .pri { background:var(--acc)!important; border-color:var(--acc)!important; color:#fff!important }
+  button.danger { color:var(--err) } button:disabled { opacity:.45; cursor:default }
+  a.btn.huge { font-size:17px; padding:12px 18px; font-weight:700 }
+  input, select { background:#0f1115; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; min-width:0 }
+  input[type=checkbox] { width:16px; height:16px; vertical-align:middle } input[type=number] { width:90px }
+  .f { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--mute) }
+  .f input, .f select { font-size:14px; color:var(--fg) }
+  table { width:100%; border-collapse:collapse } th, td { text-align:left; padding:6px; border-bottom:1px solid var(--line); vertical-align:middle }
+  th { color:var(--mute); font-weight:600; font-size:12px } .scroll { overflow-x:auto }
+  .st-pending { color:var(--mute) } .st-uploading { color:var(--warn) } .st-done { color:var(--ok) } .st-error { color:var(--err) }
+  .bar { height:10px; background:#0b0d11; border:1px solid var(--line); border-radius:99px; overflow:hidden; margin:6px 0 }
+  .bar > div { height:100%; background:var(--acc); width:0; transition:width .4s }
+  .bar.ok > div { background:var(--ok) } .bar.indet > div { width:30%!important; animation:indet 1.2s linear infinite }
+  @keyframes indet { from { margin-left:-30% } to { margin-left:100% } }
+  .pline { display:flex; justify-content:space-between; gap:8px; font-variant-numeric:tabular-nums; font-size:13px }
+  #log { height:320px; overflow:auto; font:12.5px/1.55 ui-monospace,monospace; background:#0b0d11; border-radius:8px; padding:8px }
+  #log .error { color:var(--err) } #log .warn { color:var(--warn) } #log .t { color:var(--mute) }
+  video { width:100%; background:#000; border-radius:8px; aspect-ratio:16/9 }
+  .grid2 { display:grid; grid-template-columns:auto 1fr; gap:8px 12px; align-items:center }
+  .fields { display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end }
+  #url { width:100% }
+  .check { display:flex; gap:10px; align-items:baseline; padding:6px 0; border-bottom:1px solid var(--line) }
+  .check .ic { width:18px; font-weight:700 } .check .ok { color:var(--ok) } .check .no { color:var(--err) }
+  .step { font-weight:700; color:var(--acc); margin-right:6px }
+  .slot { border:1px solid var(--line); border-radius:9px; padding:12px; margin-bottom:12px; background:#14171d }
+  .slot.off { opacity:.6 } .slot.dirty { border-color:var(--warn) }
+  .slot-head { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px }
+  .slot-head input[data-k=name] { font-weight:700; font-size:15px; width:180px }
+  .days { display:flex; gap:4px; flex-wrap:wrap } .days label { background:#0f1115; border:1px solid var(--line); border-radius:6px; padding:4px 7px; color:var(--fg); font-size:13px; cursor:pointer }
+  .days label:has(input:checked) { background:#4f8cff33; border-color:var(--acc) } .days input { display:none }
+  .hint { margin-top:10px; font-size:13px } .hint b { color:var(--fg) } .dirtyMark { color:var(--warn); font-size:12px; display:none } .slot.dirty .dirtyMark { display:inline }
+  .modes { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px }
+  .mode { flex:1; min-width:240px; display:flex; flex-direction:column; gap:3px; border:1px solid var(--line); border-radius:9px; padding:10px 12px; cursor:pointer; background:#14171d }
+  .mode:has(input:checked) { border-color:var(--acc); background:#4f8cff1a } .mode input { margin:0 6px 0 0 }
+  .tree { font-size:13px; margin-top:8px; background:#0b0d11; border-radius:8px; padding:8px 10px; line-height:1.7 }
+  .tree .leaf { padding-left:18px }
+  dialog { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:12px; padding:16px; width:min(640px, calc(100vw - 32px)) }
+  dialog::backdrop { background:#000a } dialog h3 { margin:0 0 10px }
+  .pklist { height:300px; overflow:auto; border:1px solid var(--line); border-radius:8px; margin-top:10px; background:#0b0d11 }
+  .pkitem { padding:7px 10px; cursor:pointer; border-bottom:1px solid #1d2129 } .pkitem:hover { background:#4f8cff22 }
+  code { background:#0b0d11; padding:1px 5px; border-radius:4px }
+  @media (max-width:800px) { main { grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Ghi cam EarthCam Abbey Road</h1>
+    <div class="clocks">
+      <div class="clock"><b id="clkLon">--:--:--</b><span>Giờ London</span></div>
+      <div class="clock"><b id="clkVn">--:--:--</b><span>Giờ Việt Nam</span></div>
+    </div>
+  </header>
+
+  <!-- ============ CÀI ĐẶT BAN ĐẦU ============ -->
+  <section class="wide" id="setupCard">
+    <h2>Cài đặt ban đầu <small id="setupSum"></small></h2>
+    <div><span class="step">Nơi lưu</span><b>Video lưu ở đâu?</b></div>
+    <div class="modes">
+      <label class="mode"><span><input type="radio" name="storage" value="local"><b>💾 Lưu trên máy</b></span>
+        <span class="mute small">Tự tạo một thư mục cho mỗi khung giờ bên trong thư mục gốc</span></label>
+      <label class="mode"><span><input type="radio" name="storage" value="gdrive"><b>☁ Google Drive</b></span>
+        <span class="mute small">Vẫn lưu vào các thư mục đó, rồi tải lên Drive (cần kết nối Google)</span></label>
+    </div>
+    <div class="row"><span>Thư mục gốc:</span><code id="rootPath"></code><button class="pri" id="btnPickRoot">📁 Chọn thư mục gốc…</button></div>
+    <div id="rootTree" class="tree"></div>
+
+    <div style="margin-top:16px"><span class="step">Bước 1</span><b>Cài phần phụ thuộc</b> <span class="mute small">(ffmpeg để ghi, rclone để tải lên Drive)</span></div>
+    <div id="toolList"></div>
+    <div class="row">
+      <button class="pri" id="btnInstall">Cài phần phụ thuộc</button>
+      <button id="btnReinstall" title="Tải bản mới nhất vào thư mục bin của app">Cài lại / cập nhật</button>
+      <span id="installMsg" class="mute"></span>
+    </div>
+    <div class="bar" id="installBar" hidden><div></div></div>
+    <div class="mute small" style="margin-top:6px">Không cần sudo hay apt: app tự tải ffmpeg (~160 MB) và rclone (~32 MB) vào thư mục <code>bin</code> của app.
+      Nếu muốn dùng apt cho ffmpeg: <code>sudo apt install ffmpeg</code> (rclone trong apt đã cũ, nên dùng nút trên).</div>
+
+    <div id="drivePaused" class="note">☁ Google Drive đang tạm dừng — video chỉ lưu trên máy. Chọn “Google Drive” ở trên khi muốn bật lại.</div>
+    <div id="driveSteps">
+    <div style="margin-top:16px"><span class="step">Bước 2</span><b>Kết nối Google Drive</b></div>
+    <div class="check"><span class="ic" id="gdIc">…</span><span id="gdMsg" class="mute">Đang kiểm tra…</span></div>
+    <div class="row"><button class="pri" id="btnGdrive">Kết nối Google Drive</button><button id="btnGdriveCancel" hidden>Huỷ</button></div>
+    <div id="authBox"></div>
+
+    <div style="margin-top:16px"><span class="step">Bước 3</span><b>Kiểm tra các thư mục Drive</b> <span class="mute small">(mỗi khung giờ tải vào một thư mục)</span></div>
+    <div class="row"><button id="btnFolders">Kiểm tra thư mục Drive</button><span id="folderMsg" class="mute"></span></div>
+    <div id="folderList"></div>
+    </div>
+  </section>
+
+  <dialog id="picker">
+    <h3>📁 Chọn thư mục gốc</h3>
+    <div class="row" style="margin:0"><input id="pkPath" style="flex:1"><button id="pkGo">Đi</button></div>
+    <div class="row"><button id="pkUp">⬆ Lên trên</button><button id="pkHome">🏠 Thư mục nhà</button><span id="pkMsg" class="small"></span></div>
+    <div id="pkList" class="pklist"></div>
+    <div class="row"><input id="pkNew" placeholder="Tên thư mục mới" style="flex:1"><button id="pkMk">+ Tạo thư mục mới ở đây</button></div>
+    <div class="row" style="justify-content:flex-end"><button id="pkCancel">Huỷ</button><button class="pri" id="pkOk">Chọn thư mục này</button></div>
+  </dialog>
+
+  <!-- ============ TRẠNG THÁI & TIẾN TRÌNH ============ -->
+  <section>
+    <h2>Trạng thái &amp; tiến trình</h2>
+    <span id="badge" class="badge b-idle">Chờ</span>
+    <div id="slotInfo" class="mute" style="margin-top:10px"></div>
+    <div id="countdown" class="big"></div>
+    <div id="progBox"></div>
+    <div id="upSum" class="small" style="margin-top:10px"></div>
+    <div id="errBox"></div>
+    <div class="row">
+      <button class="danger" id="btnStop">Dừng ghi</button>
+      <button id="btnSched"></button>
+    </div>
+    <div class="mute small" style="margin-top:8px">Tạm tắt lịch chỉ chặn lần ghi mới, không dừng lần đang ghi. Bấm Dừng giữa khung giờ thì khung đó không tự ghi lại nữa.</div>
+  </section>
+
+  <section>
+    <h2>Xem trực tiếp</h2>
+    <video id="video" controls muted playsinline></video>
+    <div class="row"><button id="btnLive">Xem trực tiếp</button><span id="liveMsg" class="mute"></span></div>
+  </section>
+
+  <!-- ============ LOG ============ -->
+  <section class="wide">
+    <h2>Log trực tiếp</h2>
+    <div class="row" style="margin:0 0 8px">
+      <label><input type="checkbox" id="logAuto" checked> Tự cuộn xuống</label>
+      <select id="logLevel"><option value="all">Tất cả</option><option value="error">Chỉ lỗi &amp; cảnh báo</option></select>
+      <button id="btnLogClear">Xoá màn hình</button>
+    </div>
+    <div id="log"></div>
+  </section>
+
+  <!-- ============ GHI NGAY ============ -->
+  <section>
+    <h2>Ghi ngay <small>(ngoài lịch)</small></h2>
+    <div class="fields">
+      <label class="f">Lưu vào thư mục của khung<select id="mSlot"></select></label>
+      <label class="f">Ghi trong (phút)<input id="mMin" type="number" min="0" value="0" title="0 = ghi đến khi bấm Dừng"></label>
+      <label class="f">Số video<input id="mVid" type="number" min="0" value="0" title="0 = không giới hạn"></label>
+      <label class="f">Mỗi video dài (phút)<input id="mSeg" type="number" min="0" step="0.5" value="0" title="0 = tự tính hoặc dùng mặc định"></label>
+    </div>
+    <div class="mute small" style="margin-top:6px">Để 0 nghĩa là: ghi đến khi bấm Dừng / không giới hạn số video / tự tính độ dài.</div>
+    <div class="hint" id="mHint"></div>
+    <div class="row"><button class="pri" id="btnStart">Bắt đầu ghi ngay</button></div>
+  </section>
+
+  <section>
+    <h2>Địa chỉ luồng (m3u8)</h2>
+    <div class="mute small">App tự lấy địa chỉ mới trước mỗi lần ghi. Chỉ cần dán tay khi app báo không tự lấy được.</div>
+    <input id="url" style="margin-top:8px" placeholder="https://videos-3.earthcam.com/fecnetwork/AbbeyRoadHD1.flv/playlist.m3u8?t=...&td=...">
+    <div class="row">
+      <button id="btnCheck">Kiểm tra</button>
+      <button class="pri" id="btnSaveUrl">Lưu địa chỉ</button>
+      <button id="btnRefresh">Tự lấy địa chỉ mới</button>
+    </div>
+    <div id="urlMsg" class="mute" style="margin-top:8px"></div>
+  </section>
+
+  <!-- ============ LỊCH ============ -->
+  <section class="wide">
+    <h2>Lịch ghi <small>— mỗi khung có thể lặp hằng ngày, theo thứ, hoặc một lần; chọn giờ London hay giờ Việt Nam</small></h2>
+    <div id="slots"></div>
+    <div class="row">
+      <button id="btnAddSlot">+ Thêm khung lặp lại</button>
+      <button id="btnAddOnce">+ Hẹn ghi một lần</button>
+    </div>
+  </section>
+
+  <!-- ============ FILE ============ -->
+  <section class="wide">
+    <h2>File đã ghi <small id="fileSum"></small></h2>
+    <div class="row" style="margin:0 0 8px"><button id="btnRetryAll">Tải lại tất cả file lỗi</button></div>
+    <div class="scroll"><table>
+      <thead><tr><th>Tên file</th><th>Khung giờ</th><th>Dung lượng</th><th>Thời lượng</th><th style="min-width:170px">Trạng thái</th><th></th></tr></thead>
+      <tbody id="files"></tbody>
+    </table></div>
+  </section>
+
+  <!-- ============ CÀI ĐẶT ============ -->
+  <section class="wide">
+    <h2>Cài đặt</h2>
+    <div class="grid2">
+      <label for="setSeg">Độ dài mặc định mỗi video (phút)</label><input id="setSeg" type="number" min="0.5" step="0.5">
+      <label for="setPrefix">Tiền tố tên file</label><input id="setPrefix">
+      <label for="setDel" class="drv">Xoá file trên máy sau khi đã lên Drive</label><span class="drv"><input id="setDel" type="checkbox"></span>
+    </div>
+    <div class="row"><button class="pri" id="btnSaveSet">Lưu cài đặt</button><span id="setMsg" class="mute"></span></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const LON = "Europe/London", VN = "Asia/Ho_Chi_Minh";
+const TZNAME = { [LON]: "London", [VN]: "Việt Nam" };
+const DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const STATUS = { recording:"● Đang ghi", idle:"Chờ", error:"Lỗi", starting:"Đang khởi động ghi…" };
+const UP = { pending:"Chờ tải", uploading:"Đang tải", done:"✔ Đã lên Drive", error:"✘ Lỗi", saved:"✔ Đã lưu trên máy" };
+const safeName = n => n.replace(/[\/\\\x00-\x1f]/g, "-").trim().replace(/^\.+|\.+$/g, "") || "khac";  // mirrors safe_name() in app.py
+const isLocal = () => S && S.config.storage === "local";
+let S = null, SETUP = null, slotsRendered = false, wasInstalling = false, wasAuth = false;
+
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: body ? {"Content-Type":"application/json"} : {}, body: body && JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const d = j.detail; throw new Error(Array.isArray(d) ? d.map(x => `${x.loc.at(-1)}: ${x.msg}`).join("; ") : d || r.statusText); }
+  return j;
+}
+const act = fn => async (...a) => { try { await fn(...a); await poll(); } catch (e) { alert(e.message); } };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const fmtT = (ts, tz) => new Date(ts * 1000).toLocaleTimeString("vi-VN", { timeZone: tz, hour12: false });
+const fmtHM = (ts, tz) => new Date(ts * 1000).toLocaleTimeString("vi-VN", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit" });
+const fmtDT = (ts, tz) => new Date(ts * 1000).toLocaleString("vi-VN", { timeZone: tz, hour12: false, weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const parts = (ts, tz) => new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: tz }).split(" "); // ["YYYY-MM-DD","HH:MM:SS"]
+function dur(sec) { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  return (h ? h + ":" : "") + String(m).padStart(h ? 2 : 1, "0") + ":" + String(s).padStart(2, "0"); }
+const mb = b => (b / 1e6).toFixed(1) + " MB";
+const bar = (pct, cls = "") => `<div class="bar ${cls}"><div style="width:${Math.min(100, Math.max(0, pct))}%"></div></div>`;
+
+// what a slot / manual recording will actually do — mirrors seg_len() in app.py
+function planText(durSec, videos, segSec) {
+  const def = S ? S.config.segment_seconds : 120;
+  const seg = segSec ? Math.max(10, segSec) : (videos && durSec ? Math.max(10, Math.round(durSec / videos)) : def);
+  if (!durSec) return videos ? `Ghi <b>${videos} video</b>, mỗi video <b>${dur(seg)}</b>, rồi tự dừng` : `Ghi liên tục đến khi bấm Dừng, mỗi video <b>${dur(seg)}</b>`;
+  const fit = Math.ceil(durSec / seg);
+  if (!videos) return `Ghi <b>${dur(durSec)}</b> → khoảng <b>${fit} video</b>, mỗi video <b>${dur(seg)}</b>`;
+  if (videos * seg < durSec - 5) return `Ghi <b>${videos} video × ${dur(seg)}</b> = ${dur(videos * seg)} rồi dừng sớm (khung dài ${dur(durSec)})`;
+  if (videos * seg > durSec + seg / 2) return `<span style="color:var(--warn)">⚠ Khung chỉ dài ${dur(durSec)}: hết giờ sẽ dừng, được khoảng ${fit} video × ${dur(seg)}</span>`;
+  return `Ghi <b>${dur(durSec)}</b> → <b>${videos} video</b>, mỗi video <b>${dur(seg)}</b>`;
+}
+function slotDur(st, en) { if (!st || !en) return 0; const [a, b] = [st, en].map(x => +x.slice(0, 2) * 60 + +x.slice(3, 5)); return ((b - a + 1440) % 1440 || 1440) * 60; }
+
+// ---------- clocks + live countdowns ----------
+function tick() {
+  const now = Date.now() / 1000;
+  $("clkLon").textContent = fmtT(now, LON); $("clkVn").textContent = fmtT(now, VN);
+  if (!S) return;
+  const sess = S.session, a = S.active, n = S.next, p = S.progress;
+  let info = "", cd = "", prog = "";
+  if (sess) {
+    info = `Đang chạy: <b>${esc(sess.name)}</b> · bắt đầu ${fmtHM(sess.started, LON)} London / ${fmtHM(sess.started, VN)} VN`;
+    if (sess.end) {
+      const total = sess.end - sess.started, el = now - sess.started;
+      cd = "Còn " + dur(sess.end - now);
+      prog += `<div class="pline"><span>Cả lần ghi</span><span>${dur(el)} / ${dur(total)}</span></div>${bar(el / total * 100, "ok")}`;
+    } else cd = "Đã ghi " + dur(now - sess.started);
+    if (p) {
+      const tot = p.total ? ` / ${p.total_exact ? "" : "~"}${p.total}` : "";
+      prog += `<div class="pline" style="margin-top:8px"><span><b>Video ${p.index}${tot}</b> đang ghi</span>
+        <span>${dur(p.file_time)} / ${dur(p.seg)}${p.size ? " · " + mb(p.size) : ""}${p.speed ? " · tốc độ " + p.speed : ""}</span></div>
+        ${bar(p.file_time / p.seg * 100, S.status === "recording" ? "" : "indet")}
+        <div class="mute small">Đã xong ${sess.done} video trong lần ghi này</div>`;
+    }
+  } else if (a && S.skip_until) {
+    info = `Khung <b>${esc(a.name)}</b> đã dừng tay, không ghi lại đến ${fmtHM(a.end, LON)} London`;
+  } else if (n) {
+    info = `Khung kế tiếp: <b>${esc(n.name)}</b> — ${fmtDT(n.start, LON)} London · ${fmtDT(n.start, VN)} VN`;
+    cd = "Còn " + dur(n.start - now);
+  } else info = "Không có khung giờ nào đang bật";
+  if (!S.config.schedule_enabled) info += ' · <span style="color:var(--warn)">Lịch đang tạm tắt</span>';
+  $("slotInfo").innerHTML = info; $("countdown").textContent = cd; $("progBox").innerHTML = prog;
+  document.querySelectorAll(".slot").forEach(updateSlotHint);
+  manualHint();
+}
+
+// ---------- render from /api/status ----------
+function render() {
+  const st = S.status;
+  $("badge").className = "badge b-" + st; $("badge").textContent = STATUS[st] || st;
+  $("errBox").innerHTML = [S.error, S.url_error].filter(Boolean).map(e => `<div class="alert">${esc(e)}</div>`).join("");
+  $("btnStart").disabled = !!S.session; $("btnStop").disabled = !S.session;
+  $("btnSched").textContent = S.config.schedule_enabled ? "Tạm tắt lịch" : "Bật lịch";
+  const sel = $("mSlot"), keep = sel.value;
+  sel.innerHTML = S.config.slots.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("");
+  if (keep && S.config.slots.some(s => s.id === keep)) sel.value = keep;
+  if (document.activeElement !== $("url") && !$("url").dataset.dirty) $("url").value = S.config.stream_url;
+
+  const cnt = { pending: 0, uploading: 0, done: 0, error: 0, saved: 0 };
+  S.files.forEach(f => cnt[f.status]++);
+  const cur = S.files.find(f => f.status === "uploading");
+  if (isLocal()) $("upSum").innerHTML = `💾 Lưu trên máy: <b>${S.files.filter(f => f.exists).length} video</b> trong <code>${esc(S.config.output_dir)}</code>`;
+  else $("upSum").innerHTML = `Tải lên Drive: ${cur ? `<span class="st-uploading">đang tải ${esc(cur.name)} ${cur.progress ?? 0}%${cur.speed ? " · " + esc(cur.speed) : ""}${cur.eta ? " · còn " + esc(cur.eta) : ""}</span> · ` : ""}`
+    + `${cnt.pending} chờ · <span class="st-done">${cnt.done} đã lên</span> · <span class="st-error">${cnt.error} lỗi</span>`;
+  $("fileSum").textContent = `— ${S.files.length} file · ${mb(S.files.filter(f => f.exists).reduce((a, f) => a + f.size, 0))} trên máy`;
+  $("files").innerHTML = S.files.map(f => {
+    let up = `<span class="st-${f.status}">${UP[f.status]}</span>`;
+    if (f.status === "uploading") up += ` ${f.progress ?? 0}%${f.speed ? " · " + esc(f.speed) : ""}` + bar(f.progress ?? 0);
+    if (f.status === "error") up += `<div class="small st-error">${esc(f.error)}</div>`;
+    if (f.status === "saved") up += `<div class="small mute">${esc(f.dir)}</div>`;
+    return `<tr><td>${esc(f.name)}${f.exists ? "" : ' <span class="mute small">(đã xoá trên máy)</span>'}</td><td>${esc(f.slot)}</td>
+      <td>${mb(f.size)}</td><td>${f.duration != null ? dur(f.duration) : "?"}</td><td>${up}</td>
+      <td style="white-space:nowrap">${f.status === "error" && f.exists && !isLocal() ? `<button data-retry="${esc(f.name)}">Tải lại lên</button> ` : ""}
+      ${f.exists ? `<button data-view="${esc(f.name)}">Xem</button> <button class="danger" data-del="${esc(f.name)}">Xoá</button>` : ""}</td></tr>`;
+  }).join("") || '<tr><td colspan="6" class="mute">Chưa có file nào</td></tr>';
+
+  renderStorage();
+  renderInstallAuth();
+  if (!slotsRendered) { renderSlots(); renderSettings(); slotsRendered = true; }
+  tick();
+}
+
+// ---------- storage ----------
+function renderStorage() {
+  const c = S.config;
+  document.querySelector(`input[name=storage][value=${c.storage}]`).checked = true;
+  $("rootPath").textContent = c.output_dir;
+  $("rootTree").innerHTML = `<div>📁 <b>${esc(c.output_dir)}</b></div>` + c.slots.map(s => {
+    const d = S.slot_dirs.find(x => x.id === s.id);
+    return `<div class="leaf">└ 📁 ${esc(d.path.split("/").pop())} <span class="mute small">— ${esc(s.name)} · ${d.exists ? d.count + " video" : "chưa tạo"}${s.enabled ? "" : " · khung đang tắt"}</span></div>`;
+  }).join("");
+  $("drivePaused").hidden = !isLocal(); $("driveSteps").hidden = isLocal();
+  document.querySelectorAll(".drv").forEach(el => el.style.display = isLocal() ? "none" : "");
+  $("btnRetryAll").hidden = isLocal();
+  setupSummary();
+}
+document.querySelectorAll("input[name=storage]").forEach(r => r.onchange = act(async () => {
+  await api("PUT", "/api/storage", { mode: r.value, root: S.config.output_dir });
+  if (r.value === "gdrive" && SETUP && !SETUP.gdrive) alert("Đã chuyển sang Google Drive. Hãy làm Bước 2: Kết nối Google Drive.");
+}));
+
+let PK = null;
+async function pkLoad(path) {
+  try { PK = await api("GET", "/api/fs?path=" + encodeURIComponent(path || "")); }
+  catch (e) { $("pkMsg").textContent = "✘ " + e.message; $("pkMsg").style.color = "var(--err)"; return; }
+  $("pkPath").value = PK.path; $("pkUp").disabled = !PK.parent;
+  $("pkMsg").textContent = PK.writable ? "" : "⚠ Không có quyền ghi vào thư mục này"; $("pkMsg").style.color = "var(--warn)";
+  $("pkOk").disabled = !PK.writable;
+  $("pkList").innerHTML = PK.dirs.map(d => `<div class="pkitem" data-d="${esc(d)}">📁 ${esc(d)}</div>`).join("") || '<div class="mute" style="padding:10px">(không có thư mục con)</div>';
+}
+const pkJoin = d => PK.path.replace(/\/$/, "") + "/" + d;
+$("btnPickRoot").onclick = () => { $("picker").showModal(); pkLoad(S.config.output_dir); };
+$("pkList").onclick = e => { const it = e.target.closest("[data-d]"); if (it) pkLoad(pkJoin(it.dataset.d)); };
+$("pkUp").onclick = () => pkLoad(PK.parent);
+$("pkHome").onclick = () => pkLoad(PK.home);
+$("pkGo").onclick = () => pkLoad($("pkPath").value.trim());
+$("pkPath").onkeydown = e => { if (e.key === "Enter") pkLoad($("pkPath").value.trim()); };
+$("pkMk").onclick = act(async () => { const r = await api("POST", "/api/fs/mkdir", { path: PK.path, name: $("pkNew").value.trim() }); $("pkNew").value = ""; await pkLoad(r.path); });
+$("pkCancel").onclick = () => $("picker").close();
+$("pkOk").onclick = act(async () => {
+  if (!confirm(`Dùng “${PK.path}” làm thư mục gốc?\n\nApp sẽ tạo trong đó một thư mục cho mỗi khung giờ (${S.config.slots.map(s => safeName(s.name)).join(", ")}).`)) return;
+  await api("PUT", "/api/storage", { mode: S.config.storage, root: PK.path }); $("picker").close();
+});
+
+// ---------- setup ----------
+function setupSummary() {
+  if (!S || !SETUP) return;
+  const t = SETUP.tools, ready = t.ffmpeg.path && t.ffprobe.path && (isLocal() || (t.rclone.path && SETUP.gdrive));
+  $("setupSum").innerHTML = ready ? '<span class="st-done">✔ Đã sẵn sàng</span>' : '<span class="st-error">— cần làm các bước bên dưới</span>';
+}
+function renderInstallAuth() {
+  const I = S.install, A = S.auth;
+  $("btnInstall").disabled = $("btnReinstall").disabled = I.running;
+  $("installBar").hidden = !I.running;
+  $("installBar").className = "bar" + (I.pct == null ? " indet" : "");
+  $("installBar").firstElementChild.style.width = (I.pct ?? 0) + "%";
+  $("installMsg").innerHTML = I.running ? `${esc(I.step)}${I.pct != null ? " " + I.pct + "%" : "…"}` : I.error ? `<span class="st-error">Lỗi: ${esc(I.error)}</span>` : I.step === "Xong" ? '<span class="st-done">✔ Đã cài xong</span>' : "";
+  $("btnGdrive").disabled = A.running; $("btnGdriveCancel").hidden = !A.running;
+  $("authBox").innerHTML = A.running ? (A.url
+      ? `<div class="note"><a class="btn pri huge" href="${esc(A.url)}" target="_blank" rel="noopener">🔑 Bấm vào đây để đăng nhập Google</a>
+         <ol class="small" style="margin:10px 0 0 18px;padding:0"><li>Chọn tài khoản Google chứa các thư mục Drive.</li>
+         <li>Nếu Google hỏi “ứng dụng chưa được xác minh / rclone muốn truy cập”, bấm <b>Cho phép</b> (Allow).</li>
+         <li>Khi trang hiện chữ <b>Success!</b> thì đóng tab đó, quay lại đây — app tự nhận.</li></ol></div>`
+      : `<div class="note">Đang chuẩn bị link đăng nhập…</div>`)
+    : A.error ? `<div class="alert">${esc(A.error)}</div>` : "";
+  if ((wasInstalling && !I.running) || (wasAuth && !A.running)) loadSetup();
+  wasInstalling = I.running; wasAuth = A.running;
+}
+async function loadSetup() {
+  SETUP = await api("GET", "/api/setup");
+  const t = SETUP.tools;
+  $("toolList").innerHTML = Object.entries(t).map(([n, x]) => `<div class="check"><span class="ic ${x.path ? "ok" : "no"}">${x.path ? "✔" : "✘"}</span>
+    <b style="width:70px">${n}</b><span class="mute small">${x.path ? esc(x.version) + " · " + esc(x.path) : "Chưa có — bấm “Cài phần phụ thuộc”"}</span></div>`).join("");
+  $("gdIc").textContent = SETUP.gdrive ? "✔" : "✘"; $("gdIc").className = "ic " + (SETUP.gdrive ? "ok" : "no");
+  $("gdMsg").textContent = SETUP.gdrive ? "Đã kết nối (remote “gdrive”)" : (t.rclone.path ? "Chưa kết nối — bấm nút bên dưới" : "Cần cài rclone trước (Bước 1)");
+  $("btnGdrive").textContent = SETUP.gdrive ? "Kết nối lại Google Drive" : "Kết nối Google Drive";
+  const allTools = Object.values(t).every(x => x.path);
+  $("btnInstall").textContent = allTools ? "Đã đủ phần phụ thuộc" : "Cài phần phụ thuộc";
+  $("btnInstall").classList.toggle("pri", !allTools);
+  $("btnGdrive").classList.toggle("pri", !SETUP.gdrive);
+  setupSummary();
+}
+$("btnInstall").onclick = act(() => api("POST", "/api/setup/install"));
+$("btnReinstall").onclick = act(() => confirm("Tải lại ffmpeg (~160 MB) và rclone (~32 MB) bản mới nhất vào thư mục bin của app?") && api("POST", "/api/setup/install?force=true"));
+$("btnGdrive").onclick = act(() => (!SETUP?.gdrive || confirm("Đã kết nối rồi. Kết nối lại bằng tài khoản khác?")) && api("POST", "/api/setup/gdrive"));
+$("btnGdriveCancel").onclick = act(() => api("POST", "/api/setup/gdrive/cancel"));
+$("btnFolders").onclick = async () => {
+  $("folderMsg").textContent = "Đang kiểm tra…"; $("folderList").innerHTML = "";
+  try {
+    const res = await api("POST", "/api/setup/folders");
+    $("folderList").innerHTML = res.map(r => `<div class="check"><span class="ic ${r.ok ? "ok" : "no"}">${r.ok ? "✔" : "✘"}</span><b>${esc(r.name)}</b><span class="mute small">${esc(r.msg)}</span></div>`).join("");
+    $("folderMsg").textContent = res.every(r => r.ok) ? "✔ Tất cả thư mục đều mở được" : "Có thư mục lỗi — kiểm tra lại ID thư mục";
+  } catch (e) { $("folderMsg").textContent = "✘ " + e.message; }
+};
+
+// ---------- schedule cards ----------
+function slotCard(s) {
+  const id = s.id || "";
+  return `<div class="slot${s.enabled ? "" : " off"}${id ? "" : " dirty"}" data-id="${esc(id)}">
+    <div class="slot-head">
+      <label title="Bật/tắt khung này"><input type="checkbox" data-k="enabled" ${s.enabled ? "checked" : ""}> Bật</label>
+      <input data-k="name" value="${esc(s.name)}" placeholder="Tên khung giờ">
+      <span class="dirtyMark">● Chưa lưu</span>
+      <span style="flex:1"></span>
+      <button class="pri" data-save>Lưu</button> <button data-dup title="Tạo bản sao">Nhân bản</button> <button class="danger" data-delslot>Xoá</button>
+    </div>
+    <div class="fields">
+      <label class="f">Lặp lại<select data-k="repeat">
+        <option value="daily" ${s.repeat === "daily" ? "selected" : ""}>Hằng ngày</option>
+        <option value="weekly" ${s.repeat === "weekly" ? "selected" : ""}>Theo thứ trong tuần</option>
+        <option value="once" ${s.repeat === "once" ? "selected" : ""}>Một lần (ngày cụ thể)</option></select></label>
+      <div class="f" data-show="weekly">Các thứ
+        <span class="days">${DAYS.map((d, i) => `<label><input type="checkbox" data-day="${i}" ${s.days.includes(i) ? "checked" : ""}>${d}</label>`).join("")}
+        <button data-days="0,1,2,3,4" class="small">T2–T6</button><button data-days="5,6" class="small">T7–CN</button></span></div>
+      <label class="f" data-show="once">Ngày<input type="date" data-k="date" value="${esc(s.date)}"></label>
+      <label class="f">Theo giờ<select data-k="tz">
+        <option value="${LON}" ${s.tz === LON ? "selected" : ""}>London</option>
+        <option value="${VN}" ${s.tz === VN ? "selected" : ""}>Việt Nam</option></select></label>
+      <label class="f">Bắt đầu<input type="time" data-k="start" value="${esc(s.start)}"></label>
+      <label class="f">Kết thúc<input type="time" data-k="end" value="${esc(s.end)}"></label>
+      <label class="f" title="0 = không giới hạn, ghi đến hết khung">Số video (0 = hết khung)<input type="number" min="0" data-k="videos" value="${s.videos}"></label>
+      <label class="f" title="0 = tự tính từ số video, hoặc dùng độ dài mặc định">Mỗi video dài (phút, 0 = tự tính)<input type="number" min="0" step="0.5" data-k="seg_min" value="${s.segment_seconds / 60}"></label>
+      <label class="f" data-mode="gdrive" style="flex:1;min-width:260px">ID thư mục Google Drive<input data-k="folder_id" value="${esc(s.folder_id)}" placeholder="phần cuối link thư mục: drive.google.com/drive/folders/&lt;ID&gt;"></label>
+    </div>
+    <div class="hint" data-hint></div>
+  </div>`;
+}
+function cardValues(c) {
+  const v = {}; c.querySelectorAll("[data-k]").forEach(i => v[i.dataset.k] = i.type === "checkbox" ? i.checked : i.value.trim());
+  v.days = [...c.querySelectorAll("[data-day]:checked")].map(i => +i.dataset.day);
+  v.videos = +v.videos || 0; v.segment_seconds = Math.round((+v.seg_min || 0) * 60); delete v.seg_min;
+  return v;
+}
+function updateSlotHint(c) {
+  const v = cardValues(c), now = Date.now() / 1000;
+  c.querySelectorAll("[data-show]").forEach(el => el.style.display = el.dataset.show === v.repeat ? "" : "none");
+  c.classList.toggle("off", !v.enabled);
+  const when = v.repeat === "daily" ? "Hằng ngày" : v.repeat === "weekly" ? (v.days.length ? "Mỗi " + v.days.map(d => DAYS[d]).join(", ") : "⚠ chưa chọn thứ")
+    : v.date ? "Một lần ngày " + v.date.split("-").reverse().join("/") : "⚠ chưa chọn ngày";
+  c.querySelectorAll("[data-mode]").forEach(el => el.style.display = el.dataset.mode === S.config.storage ? "" : "none");
+  let h = `${when}, ${v.start || "?"}–${v.end || "?"} giờ ${TZNAME[v.tz]} · ${planText(slotDur(v.start, v.end), v.videos, v.segment_seconds)}`;
+  h += `<br><span class="mute">Lưu vào: <code>${esc(S.config.output_dir.replace(/\/$/, ""))}/${esc(safeName(v.name || "?"))}</code>`
+    + (isLocal() ? "" : v.folder_id ? " rồi tải lên Drive" : ' <span style="color:var(--warn)">⚠ chưa có ID thư mục Drive</span>') + "</span>";
+  const nx = c.dataset.id && S.slot_next[c.dataset.id];
+  if (c.classList.contains("dirty")) h += '<br><span class="mute">Bấm Lưu để áp dụng.</span>';
+  else if (!v.enabled) h += '<br><span class="mute">Đang tắt.</span>';
+  else if (S.active && S.session && S.session.name === v.name) h += '<br><span class="st-done">● Đang ghi khung này</span>';
+  else if (nx) h += `<br><span class="mute">Lần tới: <b>${fmtDT(nx[0], VN)}</b> giờ VN = ${fmtDT(nx[0], LON)} giờ London (còn ${dur(nx[0] - now)})</span>`;
+  else h += '<br><span class="mute">Không còn lần nào sắp tới.</span>';
+  c.querySelector("[data-hint]").innerHTML = h;
+}
+function renderSlots() { $("slots").innerHTML = S.config.slots.map(slotCard).join("") || '<div class="mute">Chưa có khung giờ nào</div>'; tick(); }
+function renderSettings() {
+  const c = S.config; $("setSeg").value = c.segment_seconds / 60; $("setPrefix").value = c.prefix;
+  $("setDel").checked = c.delete_after_upload;
+}
+$("slots").addEventListener("input", e => { const c = e.target.closest(".slot"); if (c) { c.classList.add("dirty"); updateSlotHint(c); } });
+$("slots").addEventListener("click", act(async e => {
+  const c = e.target.closest(".slot"); if (!c) return;
+  const id = c.dataset.id, t = e.target;
+  if (t.dataset.days) { e.preventDefault(); const want = t.dataset.days.split(",");
+    c.querySelectorAll("[data-day]").forEach(i => i.checked = want.includes(i.dataset.day)); c.classList.add("dirty"); updateSlotHint(c); return; }
+  if (t.matches("[data-save]")) {
+    await api(id ? "PUT" : "POST", id ? `/api/slots/${id}` : "/api/slots", cardValues(c));
+    S = await api("GET", "/api/status"); renderSlots();
+  } else if (t.matches("[data-dup]")) {
+    const v = cardValues(c); v.name += " (bản sao)"; delete v.id;
+    $("slots").insertAdjacentHTML("beforeend", slotCard(v)); tick();
+  } else if (t.matches("[data-delslot]")) {
+    if (!id) { c.remove(); return; }
+    if (!confirm(`Xoá khung giờ “${cardValues(c).name}”?`)) return;
+    await api("DELETE", `/api/slots/${id}`); S = await api("GET", "/api/status"); renderSlots();
+  }
+}));
+const blank = { name: "", start: "", end: "", folder_id: "", enabled: true, repeat: "daily", days: [0,1,2,3,4,5,6], date: "", tz: LON, videos: 0, segment_seconds: 0 };
+$("btnAddSlot").onclick = () => { $("slots").insertAdjacentHTML("beforeend", slotCard({ ...blank, folder_id: S.config.slots[0]?.folder_id || "" })); tick(); };
+$("btnAddOnce").onclick = () => {
+  const t0 = Math.ceil((Date.now() / 1000 + 300) / 60) * 60, [d, st] = parts(t0, LON), [, en] = parts(t0 + 1800, LON);
+  $("slots").insertAdjacentHTML("beforeend", slotCard({ ...blank, name: "Hẹn một lần", repeat: "once", date: d, start: st.slice(0, 5), end: en.slice(0, 5),
+    folder_id: S.config.slots[0]?.folder_id || "" }));
+  tick(); $("slots").lastElementChild.scrollIntoView({ behavior: "smooth" });
+};
+
+// ---------- manual ----------
+const manualVals = () => ({ slot_id: $("mSlot").value, minutes: +$("mMin").value || 0, videos: +$("mVid").value || 0, segment_seconds: Math.round((+$("mSeg").value || 0) * 60) });
+function manualHint() { const v = manualVals(); $("mHint").innerHTML = planText(v.minutes * 60, v.videos, v.segment_seconds); }
+$("btnStart").onclick = act(() => api("POST", "/api/record/start", manualVals()));
+$("btnStop").onclick = act(() => confirm("Dừng ghi?") && api("POST", "/api/record/stop"));
+$("btnSched").onclick = act(() => api("PUT", "/api/schedule", { enabled: !S.config.schedule_enabled }));
+
+// ---------- files ----------
+$("files").addEventListener("click", act(async e => {
+  const b = e.target;
+  if (b.dataset.retry) await api("POST", `/api/files/${encodeURIComponent(b.dataset.retry)}/retry`);
+  if (b.dataset.view) window.open(`/api/files/${encodeURIComponent(b.dataset.view)}`, "_blank");
+  if (b.dataset.del && confirm(`Xoá ${b.dataset.del} trên máy?`)) await api("DELETE", `/api/files/${encodeURIComponent(b.dataset.del)}`);
+}));
+$("btnRetryAll").onclick = act(async () => { for (const f of S.files.filter(f => f.status === "error" && f.exists)) await api("POST", `/api/files/${encodeURIComponent(f.name)}/retry`); });
+
+// ---------- stream url ----------
+$("url").oninput = () => $("url").dataset.dirty = "1";
+const urlMsg = (ok, m) => { $("urlMsg").textContent = (ok ? "✔ " : "✘ ") + m; $("urlMsg").style.color = ok ? "var(--ok)" : "var(--err)"; };
+$("btnCheck").onclick = async () => { $("urlMsg").textContent = "Đang kiểm tra…"; $("urlMsg").style.color = "";
+  const r = await api("POST", "/api/stream/check", { url: $("url").value }).catch(e => ({ msg: e.message })); urlMsg(r.ok, r.msg); };
+$("btnSaveUrl").onclick = act(async () => { await api("PUT", "/api/stream", { url: $("url").value }); delete $("url").dataset.dirty; urlMsg(true, "Đã lưu"); });
+$("btnRefresh").onclick = act(async () => { $("urlMsg").textContent = "Đang lấy…"; const r = await api("POST", "/api/stream/refresh");
+  delete $("url").dataset.dirty; urlMsg(r.ok, r.ok ? "Đã lấy địa chỉ mới" : r.msg); });
+
+// ---------- settings ----------
+$("btnSaveSet").onclick = act(async () => { await api("PUT", "/api/settings", { segment_seconds: Math.round(+$("setSeg").value * 60),
+  prefix: $("setPrefix").value.trim(), delete_after_upload: $("setDel").checked });
+  $("setMsg").textContent = "Đã lưu"; });
+
+// ---------- live view ----------
+let hls = null;
+$("btnLive").onclick = () => {
+  const v = $("video");
+  if (hls) { hls.destroy(); hls = null; v.removeAttribute("src"); $("btnLive").textContent = "Xem trực tiếp"; $("liveMsg").textContent = ""; return; }
+  if (!window.Hls || !Hls.isSupported()) { $("liveMsg").textContent = "Trình duyệt không hỗ trợ hls.js"; return; }
+  hls = new Hls({ liveSyncDurationCount: 3 });
+  hls.loadSource("/proxy?u=" + encodeURIComponent(S.config.stream_url)); hls.attachMedia(v);
+  hls.on(Hls.Events.MANIFEST_PARSED, () => v.play().catch(() => {}));
+  hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) $("liveMsg").textContent = "Lỗi phát: " + d.details; });
+  $("btnLive").textContent = "Tắt xem"; $("liveMsg").textContent = "Đang tắt tiếng, bấm loa để nghe";
+};
+
+// ---------- log (SSE) ----------
+function addLog(e) {
+  const box = $("log");
+  const d = document.createElement("div"); d.className = e.level;
+  d.innerHTML = `<span class="t">${new Date(e.t * 1000).toLocaleTimeString("vi-VN", { hour12: false })}</span>  ${esc(e.msg)}`;
+  d.hidden = $("logLevel").value === "error" && e.level === "info";
+  box.appendChild(d);
+  while (box.childElementCount > 1000) box.firstElementChild.remove();
+  if ($("logAuto").checked) box.scrollTop = box.scrollHeight;
+}
+$("logLevel").onchange = () => $("log").querySelectorAll("div").forEach(d => d.hidden = $("logLevel").value === "error" && d.className === "info");
+$("btnLogClear").onclick = () => $("log").innerHTML = "";
+function connectLog() {
+  const es = new EventSource("/api/events");
+  es.onopen = () => $("log").innerHTML = "";  // server replays its buffer on every (re)connect
+  es.onmessage = m => addLog(JSON.parse(m.data));
+}
+
+async function poll() {
+  try { S = await api("GET", "/api/status"); render(); }
+  catch (e) { $("badge").textContent = "Mất kết nối với app"; $("badge").className = "badge b-error"; }
+}
+document.querySelectorAll("#mMin,#mVid,#mSeg").forEach(i => i.oninput = manualHint);
+poll(); loadSetup(); setInterval(poll, 2000); setInterval(tick, 1000); connectLog();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+bin/
+recordings/
+config.json
+files.json
+*.tmp
